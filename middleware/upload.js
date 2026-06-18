@@ -1,27 +1,21 @@
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const cloudinary = require('../config/cloudinary');
 
-const uploadDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadDir)) {
-    fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadDir),
-    filename: (req, file, cb) => {
-        const ext = path.extname(file.originalname).toLowerCase();
-        const safeName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
-        cb(null, safeName);
+const storage = new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+        folder: 'yara-cakes',
+        allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif'],
+        // Cloudinary will generate a unique public_id automatically if we don't set one
     }
 });
 
 const allowedTypes = /jpeg|jpg|png|webp|gif/;
 
 function fileFilter(req, file, cb) {
-    const extOk = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimeOk = allowedTypes.test(file.mimetype);
-    if (extOk && mimeOk) {
+    if (mimeOk) {
         return cb(null, true);
     }
     cb(new Error('Only image files (jpg, jpeg, png, webp, gif) are allowed'));
