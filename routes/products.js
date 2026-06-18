@@ -1,6 +1,5 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
+const cloudinary = require('../config/cloudinary');
 const Product = require('../models/Product');
 const upload = require('../middleware/upload');
 const requireAdminAuth = require('../middleware/authMiddleware');
@@ -31,7 +30,8 @@ router.post('/', requireAdminAuth, upload.single('image'), async (req, res) => {
             price: parseFloat(price),
             category,
             unit,
-            image: `/uploads/${req.file.filename}`
+            image: req.file.path,        // full Cloudinary URL
+            imagePublicId: req.file.filename // Cloudinary public_id, needed to delete later
         });
 
         res.status(201).json(product);
@@ -53,11 +53,12 @@ router.put('/:id', requireAdminAuth, upload.single('image'), async (req, res) =>
         const updates = { name, price: parseFloat(price), category, unit };
 
         if (req.file) {
-            updates.image = `/uploads/${req.file.filename}`;
-            // Best-effort cleanup of the old uploaded file (ignore if it doesn't exist / isn't ours)
-            if (existing.image && existing.image.startsWith('/uploads/')) {
-                const oldPath = path.join(__dirname, '..', existing.image);
-                fs.unlink(oldPath, () => {});
+            updates.image = req.file.path;
+            updates.imagePublicId = req.file.filename;
+
+            // Best-effort cleanup of the old Cloudinary image
+            if (existing.imagePublicId) {
+                cloudinary.uploader.destroy(existing.imagePublicId).catch(() => {});
             }
         }
 
@@ -69,7 +70,7 @@ router.put('/:id', requireAdminAuth, upload.single('image'), async (req, res) =>
     }
 });
 
-// Protected: delete a product (and its uploaded image file, if we own it)
+// Protected: delete a product (and its Cloudinary image, if we own it)
 router.delete('/:id', requireAdminAuth, async (req, res) => {
     try {
         const product = await Product.findByIdAndDelete(req.params.id);
@@ -77,9 +78,8 @@ router.delete('/:id', requireAdminAuth, async (req, res) => {
             return res.status(404).json({ error: 'Product not found' });
         }
 
-        if (product.image && product.image.startsWith('/uploads/')) {
-            const filePath = path.join(__dirname, '..', product.image);
-            fs.unlink(filePath, () => {});
+        if (product.imagePublicId) {
+            cloudinary.uploader.destroy(product.imagePublicId).catch(() => {});
         }
 
         res.json({ success: true });
